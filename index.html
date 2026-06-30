@@ -1466,7 +1466,67 @@ textarea:focus {
     width: 100%;
   }
 
-  </style>
+
+/* ─────────────────────────────────────────────────────────────
+   SUBMISSION ERROR BANNER
+   ───────────────────────────────────────────────────────────── */
+.submit-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 77, 106, 0.1);
+  border: 1px solid rgba(255, 77, 106, 0.35);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  margin: 0 24px 16px;
+  color: #FF4D6A;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  backdrop-filter: blur(10px);
+  animation: errorSlideIn 0.35s cubic-bezier(0.4,0,0.2,1) both;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+  width: calc(100% - 48px);
+}
+
+.submit-error-banner.hidden {
+  display: none;
+}
+
+@keyframes errorSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.submit-error-banner svg {
+  flex-shrink: 0;
+  color: #FF4D6A;
+}
+
+.submit-error-banner span {
+  flex: 1;
+}
+
+.submit-error-close {
+  background: none;
+  border: none;
+  color: rgba(255,77,106,0.6);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color var(--transition);
+  font-family: var(--font-ui);
+}
+
+.submit-error-close:hover {
+  color: #FF4D6A;
+}
+
+</style>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
@@ -2484,21 +2544,80 @@ function initKeyboard() {
 }
 
 // ── SUBMISSION ────────────────────────────────────────────────
-function submitAssessment() {
-  // Collect final step
+const FORMSPREE_URL = 'https://formspree.io/f/mnjkbnap';
+
+async function submitAssessment() {
+  // Collect final step data
   collectStepData(state.currentStep);
 
-  // Show loading
+  // Disable submit button and show loading
+  const btnNext = DOM.btnNext();
+  btnNext.disabled = true;
   DOM.loadingOverlay().classList.remove('hidden');
 
-  // Simulate async submission (replace with real API call)
-  setTimeout(() => {
-    DOM.loadingOverlay().classList.add('hidden');
-    showSuccess();
-  }, 2200);
+  // Hide any previous error
+  hideSubmitError();
 
-  // Log data (replace with real API)
-  console.log('[Elevra] Assessment submitted:', state.formData);
+  try {
+    const response = await fetch(FORMSPREE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(state.formData)
+    });
+
+    DOM.loadingOverlay().classList.add('hidden');
+
+    if (response.ok) {
+      showSuccess();
+    } else {
+      // Parse Formspree error if available
+      let errMsg = 'Submission failed. Please try again.';
+      try {
+        const errData = await response.json();
+        if (errData && errData.error) errMsg = errData.error;
+      } catch (_) {}
+      showSubmitError(errMsg);
+      btnNext.disabled = false;
+    }
+  } catch (err) {
+    DOM.loadingOverlay().classList.add('hidden');
+    showSubmitError('Network error. Please check your connection and try again.');
+    btnNext.disabled = false;
+    console.error('[Elevra] Submission error:', err);
+  }
+}
+
+function showSubmitError(msg) {
+  let errEl = document.getElementById('submit-error-banner');
+  if (!errEl) {
+    errEl = document.createElement('div');
+    errEl.id = 'submit-error-banner';
+    errEl.className = 'submit-error-banner';
+    const navBar = document.querySelector('.nav-bar');
+    navBar.parentNode.insertBefore(errEl, navBar);
+  }
+  errEl.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <span>${msg}</span>
+    <button class="submit-error-close" onclick="hideSubmitError()" aria-label="Dismiss">&#x2715;</button>
+  `;
+  errEl.classList.remove('hidden');
+  errEl.classList.add('visible');
+  errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function hideSubmitError() {
+  const errEl = document.getElementById('submit-error-banner');
+  if (errEl) {
+    errEl.classList.remove('visible');
+    errEl.classList.add('hidden');
+  }
 }
 
 function showSuccess() {
@@ -2531,6 +2650,7 @@ function scrollToTop() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-  </script>
+
+</script>
 </body>
 </html>
